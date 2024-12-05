@@ -9,6 +9,7 @@ Date: 12/5/2024
 import sys
 from urllib.request import urlopen, Request
 import string
+import re
 import pandas as pd
 from bs4 import BeautifulSoup
 
@@ -16,28 +17,23 @@ YEAR = sys.argv[1]
 TARGET_URL = "https://www.miart.it/gallerie-partecipanti/gallerie-" + YEAR + ".html"
 
 def a_processing(a):
-  """Preprocessing for a blocks. Checks whether the block is empty, and removes
-  all the special characters from the string.
+    """Preprocessing for a blocks. Checks whether the block is empty, and removes
+    all the special characters from the string.
 
-  Args:
-    a: an <a> block 
+    Args:
+        a: an <a> block 
 
-  Returns:
-    None if the block is empty, otherwise the processed list of strings.
-  """
+    Returns:
+        None if the block is empty, otherwise the processed list of strings.
+    """
+    if not a.text.strip():
+        return None
 
-  if not a.text.strip():
-    return None
-
-  output = []
-  for i in a.text.split(","):
-    element = i.translate(str.maketrans('', '', string.punctuation)).strip()
-    if len(element) == 0:
-      continue
-    else:
-      output.append(element)
-
-  return output
+    raw_text = a.text.split(",")
+    for element in raw_text:
+        if len(element.translate(str.maketrans('', '', string.punctuation)).strip()) == 0:
+            raw_text.remove(element)
+    return raw_text
 
 def scraper(url):
     """Scrapes the list of galleries at miart"""
@@ -56,34 +52,34 @@ def scraper(url):
         columns = {"GALLERY": [], "CITY": [], "URL": []}
         cross_block_text = []
         for section in sections:
-          for a in section.find_all("a"):
+            for a in section.find_all("a"):
 
-            # Preprocess the block
-            text = a_processing(a)
-            if text == None:
-              continue
+                # Preprocess the block
+                text = a_processing(a)
+                if text is None:
+                    continue
 
-            # Take care of all cases
-            if len(text)>3:
-              continue
-            elif len(text)<2:
-              cross_block_text.append(text[0])
-              if len(cross_block_text) == 2:
-                gallery, city = cross_block_text
-                columns["GALLERY"].append(gallery)
-                columns["CITY"].append(city)
-                columns["URL"].append(a["href"])
-                cross_block_text = []
-            elif len(text) == 3:
-              _, gallery, city = text
-              columns["GALLERY"].append(gallery)
-              columns["CITY"].append(city)
-              columns["URL"].append(a["href"])
-            else: 
-              gallery, city = text
-              columns["GALLERY"].append(gallery)
-              columns["CITY"].append(city)
-              columns["URL"].append(a["href"])
+                # Take care of all cases
+                if len(text)>3:
+                    continue
+                elif len(text)<2:
+                    cross_block_text.append(text[0])
+                    if len(cross_block_text) == 2:
+                        gallery, city = cross_block_text
+                        columns["GALLERY"].append(gallery.strip())
+                        columns["CITY"].append([el.strip() for el in re.split(r".-.", city)])
+                        columns["URL"].append(a["href"])
+                        cross_block_text = []
+                elif len(text) == 3:
+                    _, gallery, city = text
+                    columns["GALLERY"].append(gallery.strip())
+                    columns["CITY"].append([el.strip() for el in re.split(r".-.", city)])
+                    columns["URL"].append(a["href"])
+                else: 
+                    gallery, city = text
+                    columns["GALLERY"].append(gallery.strip())
+                    columns["CITY"].append([el.strip() for el in re.split(r".-.", city)])
+                    columns["URL"].append(a["href"])
         df = pd.DataFrame(columns)
         return df
 
